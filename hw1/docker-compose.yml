@@ -1,0 +1,67 @@
+version: '3.9'
+services:
+  json_service:
+    build: .
+    command: python3 server.py JSON
+    environment:
+      - SERVER_PORT=8001
+
+  native_service:
+    build: .
+    command: python3 server.py NATIVE
+    environment:
+      - SERVER_PORT=8002
+
+  msgpack_service:
+    build: .
+    command: python3 server.py MSGPACK
+    environment:
+      - SERVER_PORT=8003
+
+  avro_service:
+    build: .
+    command: python3 server.py AVRO
+    environment:
+      - SERVER_PORT=8004
+
+  proto_service:
+    build: .
+    command: python3 server.py PROTO
+    environment:
+      - SERVER_PORT=8005
+
+  xml_service:
+    build: .
+    command: python3 server.py XML
+    environment:
+      - SERVER_PORT=8006
+
+  yaml_service:
+    build: .
+    command: python3 server.py YAML
+    environment:
+      - SERVER_PORT=8007
+
+  proxy:
+    build: .
+    command: python3 proxy.py
+    ports:
+      - "8000:8000/udp"
+    environment:
+        PROXY_PORT: 8000
+        JSON_PORT: 8001
+        NATIVE_PORT: 8002
+        MSGPACK_PORT: 8003
+        AVRO_PORT: 8004
+        PROTO_PORT: 8005
+        XML_PORT: 8006
+        YML_PORT: 8007
+    depends_on:
+      - json_service
+      - native_service
+      - yaml_service
+      - msgpack_service
+      - avro_service
+      - proto_service
+      - xml_service
+

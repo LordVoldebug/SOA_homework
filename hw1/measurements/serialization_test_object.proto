@@ -1,0 +1,9 @@
+  syntax = "proto3";
+
+message SerializationTestObject {
+    string non_empty_string = 1;
+    repeated int32 array = 2;
+    map<string, int32> dictionary = 3;
+    int32 integer = 4;
+    double floating_point = 5;
+}
