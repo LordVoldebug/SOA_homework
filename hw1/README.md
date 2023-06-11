@@ -1,5 +1,20 @@
 # Cборка
 
-docker-compose build
+`docker-compose build
+`
 
-docker-compose up
+`docker-compose up
+`
+
+
+# Тестирование
+
+`echo -n 'get_result {имя формата} {количество итераций сериализации, времена которых мы усредняем (по умоляаню если не выставлять этот параметр, то будетм 1000)}' | nc -u -w2 127.0.0.1 8000
+`
+Например, 
+
+`echo -n 'get_result AVRO' | nc -u -w2 127.0.0.1 8000`
+`echo -n 'get_result NATIVE 100' | nc -u -w2 127.0.0.1 8000`
+
+
+Возможные форматы (названия при передачу в функцию чувствительны к регистру): JSON, MSGPACK, PROTO, AVRO, XML, YML, NATIVE.
