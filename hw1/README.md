@@ -14,6 +14,10 @@
 Например, 
 
 `echo -n 'get_result AVRO' | nc -u -w2 127.0.0.1 8000`
+
+или же
+
+
 `echo -n 'get_result NATIVE 100' | nc -u -w2 127.0.0.1 8000`
 
 
