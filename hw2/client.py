@@ -27,9 +27,9 @@ def receive_messages(stub, room_number, user):
 
 def run():
     while True:
-        server_address = input("Enter the server address (leave blank for 'localhost:50051'): ").rstrip()
+        server_address = input("Enter the server address (leave blank for 'server:50051'): ").rstrip()
         if server_address == "":
-            server_address = 'localhost:50051'
+            server_address = 'server:50051'
 
         try:
             channel = grpc.insecure_channel(server_address)

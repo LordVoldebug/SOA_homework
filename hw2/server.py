@@ -24,11 +24,11 @@ class Room:
 class ChatServicer(chat_pb2_grpc.ChatServicer):
     def __init__(self):
         self.rooms = defaultdict(Room)
-        self.roles = ["policeman", "villager", "villager"]
+        self.roles = ["policeman", "villager", "villager", "mafia", "mafia"]
 
     def CheckRoom(self, request, context):
         room = self.rooms[request.room_number]
-        if len(room.users) >= 3 or room.game_started:
+        if len(room.users) >= 5 or room.game_started:
             return chat_pb2.RoomStatus(is_filled=True)
         else:
             return chat_pb2.RoomStatus(is_filled=False)
@@ -54,7 +54,7 @@ class ChatServicer(chat_pb2_grpc.ChatServicer):
         room = self.rooms[request.room_number]
         if room.game_started:
             return
-        if len(room.users) >= 3:
+        if len(room.users) >= 5:
             return
         if any(user.name == request.user for user in room.users):
             return
@@ -67,7 +67,7 @@ class ChatServicer(chat_pb2_grpc.ChatServicer):
         room.enter_messages.append(enter_message)
         for u in room.users:
             u.queue.put(enter_message)
-        if len(room.users) == 3:
+        if len(room.users) == 5:
             self.start_game(room)
         try:
             while True:
