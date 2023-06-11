@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package chat;
+
+message Message {
+  int32 room_number = 1;
+  string user = 2;
+  string text = 3;
+}
+
+message JoinRequest {
+  int32 room_number = 1;
+  string user = 2;
+}
+
+message RoomNumber {
+  int32 room_number = 1;
+}
+
+message RoomStatus {
+  bool is_filled = 1;
+}
+
+message Username {
+  int32 room_number = 1;
+  string username = 2;
+}
+
+message UsernameStatus {
+  bool is_taken = 1;
+}
+
+message Empty {}
+
+message QuitRequest {
+  int32 room_number = 1;
+  string user = 2;
+}
+
+
+message UserList {
+    repeated string user = 1;
+}
+
+service Chat {
+  rpc SendMessage (Message) returns (Empty) {}
+  rpc ReceiveMessages (JoinRequest) returns (stream Message) {}
+  rpc CheckRoom (RoomNumber) returns (RoomStatus) {}
+  rpc CheckUsername (Username) returns (UsernameStatus) {}
+  rpc Quit(QuitRequest) returns (Empty) {}
+  rpc ListActiveUsers(RoomNumber) returns (UserList) {}
+
+
+}
