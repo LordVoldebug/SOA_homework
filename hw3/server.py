@@ -1,123 +1,88 @@
-import grpc
-from concurrent import futures
+import pika
+import sys
 import time
-import queue
-from collections import defaultdict
-import random
+import json
 
-import chat_pb2
-import chat_pb2_grpc
+users_in_rooms = {}
 
-class User:
-    def __init__(self, name, queue):
-        self.name = name
-        self.queue = queue
-        self.role = None
+def callback(ch, method, properties, body):
+    print(f"Received from Room {method.routing_key} > {body.decode()}")
+    data = json.loads(body)
 
-class Room:
-    def __init__(self):
-        self.users = []
-        self.game_started = False
-        self.enter_messages = []
+    if data['type'] == 'connect':
+        room_id = method.routing_key
+        if room_id in users_in_rooms and data['user'] in users_in_rooms[room_id]:
+
+            ch.basic_publish(
+                exchange='',
+                routing_key=properties.reply_to,
+                properties=pika.BasicProperties(
+                    correlation_id=properties.correlation_id,  # Echo the correlation_id received from the client
+                ),
+                body=json.dumps({
+                    "type": "connect_response",
+                    "user": data['user'],
+                    "msg": "Username taken, please try again."
+                })
+            )
 
 
-class ChatServicer(chat_pb2_grpc.ChatServicer):
-    def __init__(self):
-        self.rooms = defaultdict(Room)
-        self.roles = ["policeman", "villager", "villager", "mafia", "mafia"]
-
-    def CheckRoom(self, request, context):
-        room = self.rooms[request.room_number]
-        if len(room.users) >= 5 or room.game_started:
-            return chat_pb2.RoomStatus(is_filled=True)
         else:
-            return chat_pb2.RoomStatus(is_filled=False)
+            if room_id not in users_in_rooms:
+                users_in_rooms[room_id] = set()
+            users_in_rooms[room_id].add(data["user"])
 
-    def CheckUsername(self, request, context):
-        room = self.rooms[request.room_number]
-        if any(user.name == request.username for user in room.users):
-            return chat_pb2.UsernameStatus(is_taken=True)
-        else:
-            return chat_pb2.UsernameStatus(is_taken=False)
 
-    def SendMessage(self, request, context):
-        room = self.rooms[request.room_number]
-        for user in room.users:
-            if user.name != request.user:
-                user.queue.put(request)
-            room.enter_messages.append(request)
-        return chat_pb2.Empty()
+            ch.basic_publish(
+                exchange='',
+                routing_key=properties.reply_to,
+                properties=pika.BasicProperties(
+                    correlation_id=properties.correlation_id,  # Echo the correlation_id received from the client
+                ),
+                body=json.dumps({
+                    "type": "connect_response",
+                    "user": data['user'],
+                    "msg": "OK"
+                })
+            )
+    elif data['type'] == 'disconnect':
+        room_id = method.routing_key
+        if room_id in users_in_rooms and data['user'] in users_in_rooms[room_id]:
+            users_in_rooms[room_id].remove(data['user'])
 
-    def ListActiveUsers(self, request, context):
-        return chat_pb2.UserList(user=[user.name for user in self.rooms[request.room_number].users])
-    def ReceiveMessages(self, request, context):
-        room = self.rooms[request.room_number]
-        if room.game_started:
-            return
-        if len(room.users) >= 5:
-            return
-        if any(user.name == request.user for user in room.users):
-            return
-        q = queue.Queue()
-        user = User(request.user, q)
-        room.users.append(user)
-        for message in room.enter_messages:
-            q.put(message)
-        enter_message = chat_pb2.Message(user="Server", text=f"{request.user} joined the game")
-        room.enter_messages.append(enter_message)
-        for u in room.users:
-            u.queue.put(enter_message)
-        if len(room.users) == 5:
-            self.start_game(room)
+    sys.stdout.flush()
+
+
+def main():
+    max_retries = 200
+
+    for retry in range(max_retries):
+        print(f"Trying to connect to RabbitMQ. Retry # {retry}")
         try:
-            while True:
-                yield q.get()
-        except grpc.RpcError:
-            exit_message = chat_pb2.Message(user="Server", text=f"{request.user} left the game")
-            room.enter_messages.append(exit_message)
-            for u in room.users:
-                if u.name != request.user:
-                    u.queue.put(exit_message)
-        finally:
-            room.users[:] = [user for user in room.users if user.name != request.user]
+            connection = pika.BlockingConnection(pika.ConnectionParameters(host='rabbitmq'))
+            break
+        except pika.exceptions.AMQPConnectionError:
+            print("Failed to connect to RabbitMQ. Retrying...")
+            time.sleep(1)
+    else:
+        print(f"Failed to connect to RabbitMQ after {max_retries} retries. Quitting...")
+        exit(0)
+    print("Sucessfully connected to RabbitMQ")
 
-    def Quit(self, request, context):
-        room_number = request.room_number
-        user = request.user
-        room = self.rooms[room_number]
+    channel = connection.channel()
 
-        room.users[:] = [user for user in room.users if user.name != request.user]
+    channel.exchange_declare(exchange='chat_rooms', exchange_type='topic', durable=True)
 
-        exit_message = chat_pb2.Message(user="Server", text=f"{request.user} left the game")
-        room.enter_messages.append(exit_message)
-        for u in room.users:
-            if u.name != request.user:
-                u.queue.put(exit_message)
+    result = channel.queue_declare('', exclusive=True)
+    queue_name = result.method.queue
 
-        return chat_pb2.Empty()
+    channel.queue_bind(exchange='chat_rooms', queue=queue_name, routing_key='#')
 
-    def start_game(self, room):
-        room.game_started = True
-        for user in room.users:
-            user.queue.put(chat_pb2.Message(user="Server", text=f"Game has started!"))
-        roles = self.roles[:]
-        random.shuffle(roles)
-        for user in room.users:
-            user.role = roles.pop()
-            user.queue.put(chat_pb2.Message(user="Server", text=f"You are a {user.role}."))
+    channel.basic_consume(
+        queue=queue_name, on_message_callback=callback, auto_ack=True)
 
-def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
-    chat_pb2_grpc.add_ChatServicer_to_server(ChatServicer(), server)
-    print('Starting server. Listening on port 50051.')
-    server.add_insecure_port('[::]:50051')
-    server.start()
-
-    try:
-        while True:
-            time.sleep(86400)
-    except KeyboardInterrupt:
-        server.stop(0)
+    print("Chat server started. Waiting for messages...")
+    channel.start_consuming()
 
 if __name__ == '__main__':
-    serve()
+    main()

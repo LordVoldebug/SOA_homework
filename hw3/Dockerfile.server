@@ -1,9 +1,9 @@
-FROM python:3.9
+FROM python:3.8
 
 WORKDIR /app
 
-COPY . /app
+COPY . .
 
-RUN pip install grpcio grpcio-tools
+RUN pip install pika
 
-CMD ["python", "server.py"]
+CMD [ "python", "./server.py" ]

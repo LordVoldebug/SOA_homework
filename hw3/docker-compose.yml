@@ -1,17 +1,19 @@
-version: '3.9'
+version: '3.8'
 services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - 5672:5672
+      - 15672:15672
   server:
     build:
       context: .
       dockerfile: Dockerfile.server
-    ports:
-      - "50051:50051"
-
+    depends_on:
+      - rabbitmq
   client:
     build:
       context: .
       dockerfile: Dockerfile.client
-    stdin_open: true
-    tty: true
     depends_on:
       - server
